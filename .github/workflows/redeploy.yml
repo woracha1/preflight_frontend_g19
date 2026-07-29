@@ -1,75 +1,66 @@
-name: Redeploy
+name: CI/CD Deploy Frontend to VPS
 
 on:
-  release:
-    types: [published]
   push:
-    branches: ["main", "master"]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-  workflow_dispatch: # Allow manual triggering
+    branches: [ "main", "master" ]
 
 jobs:
-  redeploy:
-    name: Push Docker image to Docker Hub and Trigger Deploy
+  build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
-      attestations: write
-      id-token: write
 
     steps:
-      - name: Discord notification (start)
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          DISCORD_USERNAME: github_server
-          DISCORD_AVATAR: https://picsum.photos/id/237/200/300
-        uses: Ilshidur/action-discord@master
-        with:
-          args: "The project {{ EVENT_PAYLOAD.repository.full_name }} has started GitHub Action."
 
-      - name: Check out the repo
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Login to dockerhub
+
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ${{ vars.IMAGE_NAME }}
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v3
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ vars.IMAGE_NAME }}:latest
 
-      - name: Invoke deployment hook
-        uses: distributhor/workflow-webhook@v3
-        with:
-          webhook_url: http://14.207.142.57:9000/hooks/redeploy
-          webhook_secret: fs69
-          data: '{"project_group": "${{ vars.PROJECT_GROUP }}", "discord_webhook": "${{ secrets.DISCORD_WEBHOOK }}", "webhook_secret": "${{ secrets.WEBHOOK_SECRET }}"}'
-          verbose: true
 
-      - name: Discord notification (finish)
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          DISCORD_USERNAME: github_server
-          DISCORD_AVATAR: https://picsum.photos/id/237/200/300
-        uses: Ilshidur/action-discord@master
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          args: "The project {{ EVENT_PAYLOAD.repository.full_name }} has finished GitHub Action."
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            # หยุดและลบ container เก่า (ถ้ามี)
+            docker stop frontend-app || true
+            docker rm frontend-app || true
+
+            # ดึง Image ล่าสุดลงมา
+            docker pull ${{ vars.IMAGE_NAME }}:latest
+
+            # รัน container ใหม่พร้อมต่อเข้า network
+            docker run -d \
+              --name frontend-app \
+              --network my-app-network \
+              -p 80:80 \
+              --restart always \
+              ${{ vars.IMAGE_NAME }}:latest
+
+            # ลบ image เก่าๆ ที่ไม่ได้ใช้เพื่อประหยัดพื้นที่ VPS
+            docker image prune -f
+
+
+      - name: Send Notification to Discord
+        if: always()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: ${{ job.status }}
+          title: "Deploy Frontend Status"
+          description: "Commit: ${{ github.event.head_commit.message }}"
