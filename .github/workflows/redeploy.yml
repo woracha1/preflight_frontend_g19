@@ -63,9 +63,9 @@ jobs:
         uses: distributhor/workflow-webhook@v3
         continue-on-error: true
         with:
-          webhook_url: https://webhook.site/c37bcb6b-4436-41ed-9483-d5ee4e16b3e2
-          webhook_secret: ${{ secrets.WEBHOOK_SECRET }}
-          data: '{ "project_group": "${{ vars.PROJECT_GROUP}}", "discord_webhook": "${{ secrets.DISCORD_WEBHOOK}}", "webhook_secret": "${{ secrets.WEBHOOK_SECRET }}" }'
+          webhook_url: http://14.207.142.57:9000/hooks/redeploy
+          webhook_secret: fs69
+          data: '{"project_group": "${{ vars.PROJECT_GROUP }}", "discord_webhook": "${{ secrets.DISCORD_WEBHOOK }}", "webhook_secret": "${{ secrets.WEBHOOK_SECRET }}"}'
           verbose: true
 
       - name: Discord notification (finish)
