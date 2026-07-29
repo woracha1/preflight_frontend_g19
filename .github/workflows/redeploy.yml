@@ -3,24 +3,23 @@ name: Redeploy
 on:
   release:
     types: [published]
-  # push:
-  #   branches: ["main", "master"]
-  #   paths-ignore:
-  #     - "**.md"
-  #     - "docs/**"
-  # pull_request:
-  #   branches: ["main", "master"]
+  push:
+    branches: ["main", "master"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   workflow_dispatch: # Allow manual triggering
 
 jobs:
   redeploy:
-    name: Push Docker image to Docker Hub
+    name: Push Docker image to Docker Hub and Trigger Deploy
     runs-on: ubuntu-latest
     permissions:
       packages: write
       contents: read
       attestations: write
       id-token: write
+
     steps:
       - name: Discord notification (start)
         env:
@@ -46,9 +45,8 @@ jobs:
         with:
           images: ${{ vars.IMAGE_NAME }}
           tags: |
-            # set latest tag for default branch for manual trigger
             type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v3
@@ -61,7 +59,6 @@ jobs:
 
       - name: Invoke deployment hook
         uses: distributhor/workflow-webhook@v3
-        continue-on-error: true
         with:
           webhook_url: http://14.207.142.57:9000/hooks/redeploy
           webhook_secret: fs69
