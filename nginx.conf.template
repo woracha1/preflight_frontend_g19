@@ -18,13 +18,10 @@ server {
         chunked_transfer_encoding off;
         proxy_buffering off;
         proxy_cache off;
-        
-        # ตัด /api ออกแล้วส่ง path ที่เหลือไปให้ backend
+    
         rewrite ^/api/(.*)$ /$1 break;
-        
-        # เติม / ปิดท้ายตัวแปร proxy_pass
-        proxy_pass ${NGINX_PROXY}/;
-        
+        proxy_pass http://backend-app:8080/; 
+    
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
     }
