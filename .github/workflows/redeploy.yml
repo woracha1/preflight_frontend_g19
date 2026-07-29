@@ -1,66 +1,68 @@
 name: CI/CD Deploy Frontend to VPS
 
 on:
+  release:
+    types: [published]
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  workflow_dispatch: # เปิดให้กดรัน Manual ผ่าน GitHub ได้
 
 jobs:
-  build-and-deploy:
+  redeploy:
+    name: Build Docker image and Trigger Webhook Deploy
     runs-on: ubuntu-latest
 
     steps:
+      # 1. แจ้งเตือนเริ่มการทำงานเข้า Discord
+      - name: Discord notification (start)
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_USERNAME: github_server
+          DISCORD_AVATAR: https://picsum.photos/id/237/200/300
+        uses: Ilshidur/action-discord@master
+        with:
+          args: "The project {{ EVENT_PAYLOAD.repository.full_name }} has started GitHub Action."
 
-      - name: Checkout Code
+      # 2. ดึงโค้ดลงมา
+      - name: Check out the repo
         uses: actions/checkout@v4
 
-
-      - name: Log in to Docker Hub
+      # 3. Login เข้า Docker Hub
+      - name: Login to dockerhub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-
-      - name: Build and Push Docker Image
+      # 4. Build และ Push Image (ระบุ Tag latest ให้ชัดเจน 100%)
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile
           push: true
-          tags: ${{ vars.IMAGE_NAME }}:latest
+          tags: |
+            ${{ vars.IMAGE_NAME }}:latest
+            ${{ vars.IMAGE_NAME }}:${{ github.sha }}
 
-
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.0.3
+      # 5. ยิง Webhook ไปสะกิด VPS ให้ดึง Image ใหม่ไปรัน
+      - name: Invoke deployment hook
+        uses: distributhor/workflow-webhook@v3
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          password: ${{ secrets.VPS_PASSWORD }}
-          port: ${{ secrets.VPS_PORT }}
-          script: |
-            # หยุดและลบ container เก่า (ถ้ามี)
-            docker stop frontend-app || true
-            docker rm frontend-app || true
+          webhook_url: http://14.207.142.57:9000/hooks/redeploy
+          webhook_secret: ${{ secrets.WEBHOOK_SECRET }} # แนะนำให้ใช้ Secret จาก GitHub
+          data: '{"project_group": "${{ vars.PROJECT_GROUP }}", "discord_webhook": "${{ secrets.DISCORD_WEBHOOK }}", "webhook_secret": "${{ secrets.WEBHOOK_SECRET }}"}'
+          verbose: true
 
-            # ดึง Image ล่าสุดลงมา
-            docker pull ${{ vars.IMAGE_NAME }}:latest
-
-            # รัน container ใหม่พร้อมต่อเข้า network
-            docker run -d \
-              --name frontend-app \
-              --network my-app-network \
-              -p 80:80 \
-              --restart always \
-              ${{ vars.IMAGE_NAME }}:latest
-
-            # ลบ image เก่าๆ ที่ไม่ได้ใช้เพื่อประหยัดพื้นที่ VPS
-            docker image prune -f
-
-
-      - name: Send Notification to Discord
-        if: always()
-        uses: sarisia/actions-status-discord@v1
+      # 6. แจ้งเตือนเสร็จสิ้นเข้า Discord
+      - name: Discord notification (finish)
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_USERNAME: github_server
+          DISCORD_AVATAR: https://picsum.photos/id/237/200/300
+        uses: Ilshidur/action-discord@master
         with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: ${{ job.status }}
-          title: "Deploy Frontend Status"
-          description: "Commit: ${{ github.event.head_commit.message }}"
+          args: "The project {{ EVENT_PAYLOAD.repository.full_name }} has finished GitHub Action."

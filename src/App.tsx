@@ -139,7 +139,7 @@ function App() {
     {currentTime.format("dddd, D MMMM YYYY")}
   </p>
   <div className="flex justify-center gap-2 mt-3">
-    <div className="aura aura-gold">
+    <div className="aura aura-silver">
     <div className="flex flex-col items-center bg-white text-gray-500-content rounded-box px-3 py-2 min-w-[60px]">
       <span className="text-3xl font-bold tabular-nums">
         {currentTime.format("hh")}
