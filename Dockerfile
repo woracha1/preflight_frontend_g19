@@ -24,9 +24,6 @@ RUN pnpm run build
 # Use the official Nginx image (Alpine version) for serving the built app
 FROM nginx:1.31.2-alpine AS production
 
-# ลบ default config ของ image ทิ้ง ป้องกันชนกับ config ของเรา
-RUN rm -f /etc/nginx/conf.d/default.conf
-
 # Copy the Nginx configuration template into the correct directory inside the container
 COPY ./nginx.conf.template /etc/nginx/templates/nginx.conf.template
 

@@ -1,4 +1,4 @@
-name: CI/CD Deploy Frontend to VPS
+name: Redeploy
 
 on:
   release:
@@ -8,15 +8,19 @@ on:
     paths-ignore:
       - "**.md"
       - "docs/**"
-  workflow_dispatch: # เปิดให้กดรัน Manual ผ่าน GitHub ได้
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   redeploy:
-    name: Build Docker image and Trigger Webhook Deploy
+    name: Push Docker image to Docker Hub and Trigger Deploy
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+      attestations: write
+      id-token: write
 
     steps:
-      # 1. แจ้งเตือนเริ่มการทำงานเข้า Discord
       - name: Discord notification (start)
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
@@ -26,38 +30,41 @@ jobs:
         with:
           args: "The project {{ EVENT_PAYLOAD.repository.full_name }} has started GitHub Action."
 
-      # 2. ดึงโค้ดลงมา
       - name: Check out the repo
         uses: actions/checkout@v4
 
-      # 3. Login เข้า Docker Hub
       - name: Login to dockerhub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 4. Build และ Push Image (ระบุ Tag latest ให้ชัดเจน 100%)
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ vars.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v3
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: |
-            ${{ vars.IMAGE_NAME }}:latest
-            ${{ vars.IMAGE_NAME }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
-      # 5. ยิง Webhook ไปสะกิด VPS ให้ดึง Image ใหม่ไปรัน
       - name: Invoke deployment hook
         uses: distributhor/workflow-webhook@v3
         with:
           webhook_url: http://14.207.142.57:9000/hooks/redeploy
-          webhook_secret: ${{ secrets.WEBHOOK_SECRET }} # แนะนำให้ใช้ Secret จาก GitHub
+          webhook_secret: fs69
           data: '{"project_group": "${{ vars.PROJECT_GROUP }}", "discord_webhook": "${{ secrets.DISCORD_WEBHOOK }}", "webhook_secret": "${{ secrets.WEBHOOK_SECRET }}"}'
           verbose: true
 
-      # 6. แจ้งเตือนเสร็จสิ้นเข้า Discord
       - name: Discord notification (finish)
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
