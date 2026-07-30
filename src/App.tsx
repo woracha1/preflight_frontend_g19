@@ -254,7 +254,7 @@ function App() {
                                   type="checkbox"
                                   checked={todo.isDone}
                                   onChange={() => toggleDone(todo.id)}
-                                  className="checkbox checkbox-success bg-white"
+                                  className="checkbox checkbox-success"
                                 />
                                 <div className="flex flex-col">
                                   <span
