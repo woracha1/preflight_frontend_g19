@@ -1,5 +1,4 @@
 name: Redeploy
-
 on:
   release:
     types: [published]
@@ -9,7 +8,6 @@ on:
       - "**.md"
       - "docs/**"
   workflow_dispatch: # Allow manual triggering
-
 jobs:
   redeploy:
     name: Push Docker image to Docker Hub and Trigger Deploy
@@ -19,7 +17,6 @@ jobs:
       contents: read
       attestations: write
       id-token: write
-
     steps:
       - name: Discord notification (start)
         env:
@@ -29,16 +26,13 @@ jobs:
         uses: Ilshidur/action-discord@master
         with:
           args: "The project {{ EVENT_PAYLOAD.repository.full_name }} has started GitHub Action."
-
       - name: Check out the repo
         uses: actions/checkout@v4
-
       - name: Login to dockerhub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v4
@@ -47,7 +41,6 @@ jobs:
           tags: |
             type=ref,event=tag
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v3
         with:
@@ -56,15 +49,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Invoke deployment hook
-        uses: distributhor/workflow-webhook@v3
-        with:
-          webhook_url: http://14.207.142.57:9000/hooks/redeploy
-          webhook_secret: fs69
-          data: '{"project_group": "${{ vars.PROJECT_GROUP }}", "discord_webhook": "${{ secrets.DISCORD_WEBHOOK }}", "webhook_secret": "${{ secrets.WEBHOOK_SECRET }}"}'
-          verbose: true
-
+      - name: Trigger VPS redeploy
+        run: |
+          curl -sf -X POST "http://${{ secrets.VPS_HOST }}:9000/hooks/redeploy" \
+            -H "Content-Type: application/json" \
+            -d "{\"webhook_secret\": \"${{ secrets.WEBHOOK_SECRET }}\"}"
       - name: Discord notification (finish)
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
